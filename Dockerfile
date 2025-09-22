@@ -44,6 +44,8 @@ RUN apt update && \
         ncat socat netcat-openbsd rlwrap telnet-ssl openssh-client \
         # Compression and archives
         unzip zip p7zip-full unrar-free && \
+    # Fix ZAP shell script to mimic previous version (for command completion from old LLMs)
+    ln -s /usr/bin/zaproxy /usr/bin/zap.sh && \
     # Dependencies for docker installation
     apt install -y --no-install-recommends \
         apt-transport-https ca-certificates gnupg lsb-release && \
