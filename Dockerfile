@@ -41,7 +41,7 @@ RUN apt update && \
         # Build tools
         build-essential gcc g++ make cmake libpcap-dev \
         # Network utilities
-        ncat socat netcat-openbsd rlwrap telnet-ssl openssh-client \
+        ncat socat netcat-openbsd rlwrap telnet openssh-client \
         # Compression and archives
         unzip zip p7zip-full unrar-free && \
     # Fix ZAP shell script to mimic previous version (for command completion from old LLMs)
