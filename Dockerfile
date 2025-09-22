@@ -62,7 +62,7 @@ RUN apt update && \
 
 # Install Go for extra tools
 RUN ARCH=$(dpkg --print-architecture) && \
-    wget -O go.tar.gz "https://go.dev/dl/go1.24.4.linux-${ARCH}.tar.gz" && \
+    wget -O go.tar.gz "https://go.dev/dl/go1.24.7.linux-${ARCH}.tar.gz" && \
     tar -C /usr/local -xzf go.tar.gz && \
     rm go.tar.gz && \
     mkdir -p /root/go/bin /root/go/src /root/go/pkg
