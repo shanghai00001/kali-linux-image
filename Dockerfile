@@ -6,6 +6,7 @@ RUN apt update && \
         # System utilities
         curl wget git vim nano net-tools iproute2 dnsutils bind9-host \
         jq tmux screen netcat-traditional socat nmap nmap-common masscan \
+        iputils-ping \
         # Network reconnaissance and scanning
         amass gobuster ffuf dirb nikto whatweb theharvester dnsx \
         arp-scan arping fping hping3 netdiscover nbtscan onesixtyone \
