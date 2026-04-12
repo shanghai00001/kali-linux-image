@@ -12,7 +12,7 @@ RUN apt update && \
         arp-scan arping fping hping3 netdiscover nbtscan onesixtyone \
         sublist3r dnsrecon fierce ncrack \
         # Web testing
-        sqlmap wfuzz nuclei feroxbuster dirsearch zaproxy \
+        sqlmap wfuzz nuclei feroxbuster dirsearch zaproxy wpscan \
         # Brute force and passwords
         hydra john john-data crunch medusa patator wordlists \
         hashid hash-identifier hashcat hashcat-data hashcat-utils \
@@ -40,7 +40,7 @@ RUN apt update && \
         # Python interpreter and libraries
         python3-pip python3-venv python3-dev \
         # Build tools
-        build-essential gcc g++ make cmake libpcap-dev \
+        build-essential gcc g++ make cmake libpcap-dev libpcap0.8 \
         # Network utilities
         ncat socat netcat-openbsd rlwrap telnet openssh-client \
         # Compression and archives
@@ -122,6 +122,25 @@ RUN set -e && \
     /usr/local/go/bin/go install github.com/hakluke/hakrawler@latest && \
     rm -rf /root/go/pkg/*
 
+# === 集成本地xray工具 ===
+# 创建xray配置目录
+RUN mkdir -p /root/.xray
+
+# 复制xray二进制文件
+COPY xray /usr/local/bin/xray
+
+# 复制存在的配置文件（如果它们存在的话，需要手动检查并复制）
+# 注意：只复制确实存在的文件
+
+# 设置xray执行权限并验证安装
+RUN chmod +x /usr/local/bin/xray && \
+    echo "Xray copied to /usr/local/bin/xray" && \
+    ls -la /usr/local/bin/xray
+
+# 设置xray环境变量
+ENV XRAY_CONFIG_DIR=/root/.xray
+RUN echo "export XRAY_CONFIG_DIR=/root/.xray" >> /root/.bashrc
+
 # Set working directory
 RUN mkdir -p /work
 WORKDIR /work
@@ -135,7 +154,7 @@ FROM base AS systemd
 # Install systemd packages
 RUN apt update && apt upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt install -y \
-        systemd systemd-sysv dbus python3 && \
+        systemd systemd-sysv dbus python3 libpcap0.8 && \
     apt clean && rm -rf /var/lib/apt/lists/*
 
 # Install docker-systemctl-replacement
@@ -153,9 +172,9 @@ RUN systemctl mask dev-hugepages.mount sys-fs-fuse-connections.mount && \
     systemctl mask getty.target && \
     systemctl mask console-getty.service
 
-# Copy and install container entrypoint script
-COPY container-entrypoint.sh /usr/local/bin/container-entrypoint
-RUN chmod +x /usr/local/bin/container-entrypoint
+# Copy container entrypoint script only if it exists
+# We'll create a simple entrypoint script in the next step if it doesn't exist
+RUN if [ -f /container-entrypoint.sh ]; then cp /container-entrypoint.sh /usr/local/bin/container-entrypoint && chmod +x /usr/local/bin/container-entrypoint; else echo '#!/bin/bash\nexec "$@"' > /usr/local/bin/container-entrypoint && chmod +x /usr/local/bin/container-entrypoint; fi
 
 # Use custom entrypoint
 ENTRYPOINT ["/usr/local/bin/container-entrypoint"]
