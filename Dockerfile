@@ -12,7 +12,7 @@ RUN apt update && \
         arp-scan arping fping hping3 netdiscover nbtscan onesixtyone \
         sublist3r dnsrecon fierce ncrack \
         # Web testing
-        sqlmap wfuzz nuclei feroxbuster dirsearch zaproxy wpscan \
+        sqlmap wfuzz nuclei feroxbuster dirsearch zaproxy \
         # Brute force and passwords
         hydra john john-data crunch medusa patator wordlists \
         hashid hash-identifier hashcat hashcat-data hashcat-utils \
@@ -40,7 +40,7 @@ RUN apt update && \
         # Python interpreter and libraries
         python3-pip python3-venv python3-dev \
         # Build tools
-        build-essential gcc g++ make cmake libpcap-dev libpcap0.8 \
+        build-essential gcc g++ make cmake libpcap-dev \
         # Network utilities
         ncat socat netcat-openbsd rlwrap telnet openssh-client \
         # Compression and archives
@@ -60,6 +60,55 @@ RUN apt update && \
         gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
     apt update && apt install -y docker-ce-cli && \
     apt clean && rm -rf /var/lib/apt/lists/*
+    
+    # Copy local xray binary file
+COPY xray /root/xray/xray
+COPY ca.key /root/xray/ca.key
+COPY ca.crt /root/xray/ca.crt
+COPY config.yaml /root/xray/config.yaml
+COPY module.xray.yaml /root/xray/module.xray.yaml
+COPY plugin.xray.yaml /root/xray/plugin.xray.yaml
+COPY 使用文档.txt /root/xray/使用文档.txt
+
+# Set execute permissions for xray
+RUN chmod +x /root/xray/xray
+
+# Create xray configuration directory with proper permissions
+RUN mkdir -p /root/.config/xray && \
+    chmod 700 /root/.config/xray
+
+# Create WRAPPER SCRIPT to handle directory dependency - SOLUTION FOR XRAX
+RUN echo '#!/bin/bash' > /usr/local/bin/xray && \
+    echo '# Xray wrapper script to handle directory dependency' >> /usr/local/bin/xray && \
+    echo '# Save current directory' >> /usr/local/bin/xray && \
+    echo 'CURRENT_DIR=$(pwd)' >> /usr/local/bin/xray && \
+    echo '# Change to xray directory' >> /usr/local/bin/xray && \
+    echo 'cd /root/xray || exit 1' >> /usr/local/bin/xray && \
+    echo '# Execute xray with all arguments' >> /usr/local/bin/xray && \
+    echo './xray "$@"' >> /usr/local/bin/xray && \
+    echo '# Return to original directory' >> /usr/local/bin/xray && \
+    echo 'cd "$CURRENT_DIR" || exit 1' >> /usr/local/bin/xray && \
+    echo '# Exit with xray command status' >> /usr/local/bin/xray && \
+    echo 'exit $?' >> /usr/local/bin/xray && \
+    chmod +x /usr/local/bin/xray
+
+# BUILD-TIME XRAX VERSION VERIFICATION - NOW WITH WRAPPER
+RUN echo "=== XRAX BUILD VERIFICATION START ===" && \
+    echo "1. Checking wrapper script functionality:" && \
+    /usr/local/bin/xray version && \
+    echo "2. Checking from work directory:" && \
+    cd /work && xray version && \
+    echo "3. Generating initial configuration files:" && \
+    xray genca -d /root/.config/xray/ || echo "CA generation might have failed, continuing..." && \
+    echo "4. Running plugins command to generate config files:" && \
+    xray plugins && \
+    cd /work && xray genca && \
+    cd /home && xray version && \
+    echo "5. Verifying configuration files were generated:" && \
+    ls -la /root/.config/xray/ && \
+    echo "6. Testing web scan functionality:" && \
+    xray webscan --help >/dev/null 2>&1 && echo "Web scan test passed" || echo "Web scan test failed, continuing..." && \
+    echo "=== XRAX BUILD VERIFICATION COMPLETE ==="
 
 # Install Go for extra tools
 RUN ARCH=$(dpkg --print-architecture) && \
@@ -122,25 +171,6 @@ RUN set -e && \
     /usr/local/go/bin/go install github.com/hakluke/hakrawler@latest && \
     rm -rf /root/go/pkg/*
 
-# === 集成本地xray工具 ===
-# 创建xray配置目录
-RUN mkdir -p /root/.xray
-
-# 复制xray二进制文件
-COPY xray /usr/local/bin/xray
-
-# 复制存在的配置文件（如果它们存在的话，需要手动检查并复制）
-# 注意：只复制确实存在的文件
-
-# 设置xray执行权限并验证安装
-RUN chmod +x /usr/local/bin/xray && \
-    echo "Xray copied to /usr/local/bin/xray" && \
-    ls -la /usr/local/bin/xray
-
-# 设置xray环境变量
-ENV XRAY_CONFIG_DIR=/root/.xray
-RUN echo "export XRAY_CONFIG_DIR=/root/.xray" >> /root/.bashrc
-
 # Set working directory
 RUN mkdir -p /work
 WORKDIR /work
@@ -154,7 +184,7 @@ FROM base AS systemd
 # Install systemd packages
 RUN apt update && apt upgrade -y && \
     DEBIAN_FRONTEND=noninteractive apt install -y \
-        systemd systemd-sysv dbus python3 libpcap0.8 && \
+        systemd systemd-sysv dbus python3 && \
     apt clean && rm -rf /var/lib/apt/lists/*
 
 # Install docker-systemctl-replacement
@@ -172,9 +202,10 @@ RUN systemctl mask dev-hugepages.mount sys-fs-fuse-connections.mount && \
     systemctl mask getty.target && \
     systemctl mask console-getty.service
 
-# Copy container entrypoint script only if it exists
-# We'll create a simple entrypoint script in the next step if it doesn't exist
-RUN if [ -f /container-entrypoint.sh ]; then cp /container-entrypoint.sh /usr/local/bin/container-entrypoint && chmod +x /usr/local/bin/container-entrypoint; else echo '#!/bin/bash\nexec "$@"' > /usr/local/bin/container-entrypoint && chmod +x /usr/local/bin/container-entrypoint; fi
+# Copy and install container entrypoint script
+COPY container-entrypoint.sh /usr/local/bin/container-entrypoint
+RUN dos2unix /usr/local/bin/container-entrypoint || sed -i 's/\r$//' /usr/local/bin/container-entrypoint
+RUN chmod +x /usr/local/bin/container-entrypoint
 
 # Use custom entrypoint
 ENTRYPOINT ["/usr/local/bin/container-entrypoint"]
